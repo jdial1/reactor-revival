@@ -1,6 +1,5 @@
 import { html, nothing } from "lit-html";
-import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import { classMap, repeat, styleMap } from "../dom/lit.js";
+import { classMap, repeat } from "../dom/lit.js";
 
 export function infoBarTemplate({
   powerClass,
@@ -189,10 +188,6 @@ export function partsPanelLayoutTemplate({
   onSwitchHeat,
   onHelpToggle,
   tabContent,
-  moduleInfoContent,
-  moduleInfoPanelClass = "parts-module-info-panel",
-  hasSelection = false,
-  onDeselect,
 }) {
   return html`
     <div class="parts_header">
@@ -229,22 +224,6 @@ export function partsPanelLayoutTemplate({
     <div id="parts_tab_contents">
       ${tabContent}
     </div>
-    ${hasSelection
-      ? html`
-          <div id="parts_module_info" class=${moduleInfoPanelClass} aria-live="polite">
-            <button
-              class="parts-module-info-close"
-              type="button"
-              title="Deselect module"
-              aria-label="Deselect module"
-              @click=${onDeselect}
-            >
-              &#x2715;
-            </button>
-            ${moduleInfoContent}
-          </div>
-        `
-      : null}
   `;
 }
 
@@ -856,52 +835,6 @@ export function sectionHubMetaTemplate({
       <span class="section-count">${researched}/${total}</span>
       <span class=${affordableClass}>${affordableLabel}</span>
     </span>
-  `;
-}
-
-export function upgradeHubDetailEmptyTemplate(message = "— Select an upgrade —") {
-  return html`<span class="upgrade-hub-detail-empty">${message}</span>`;
-}
-
-export function upgradeHubDetailPanelTemplate({
-  iconPath,
-  title,
-  descHtml,
-  levelHeader,
-  costDisplay,
-  doctrineLocked,
-  isMaxed,
-  unaffordable,
-  affordProgress,
-  ariaLabel,
-  onBuyClick,
-}) {
-  const buyDisabled = doctrineLocked || isMaxed || unaffordable;
-  const buyStyle = affordProgress != null && affordProgress < 1
-    ? styleMap({ "--afford-progress": String(Math.max(0, Math.min(1, affordProgress))) })
-    : nothing;
-  return html`
-    <div class="upgrade-hub-detail-inner">
-      <div class="upgrade-hub-detail-copy">
-        <div class="upgrade-hub-detail-title">${title}</div>
-        ${!isMaxed && descHtml ? html`<div class="upgrade-hub-detail-desc">${unsafeHTML(descHtml)}</div>` : nothing}
-      </div>
-      <div class="upgrade-hub-detail-footer">
-        <div class="upgrade-hub-detail-icon">
-          <div class="image" style=${styleMap({ backgroundImage: `url('${iconPath}')` })}></div>
-        </div>
-        <span class="upgrade-hub-detail-level">${levelHeader}</span>
-        ${!isMaxed ? html`
-          <button class="pixel-btn upgrade-action-btn industrial-btn upgrade-hub-detail-buy"
-                  style=${buyStyle}
-                  ?disabled=${buyDisabled}
-                  aria-label=${ariaLabel}
-                  @click=${onBuyClick}>
-            <span class="cost-display cathode-readout">${costDisplay}</span>
-          </button>
-        ` : html`<span class="upgrade-hub-detail-maxed">MAX</span>`}
-      </div>
-    </div>
   `;
 }
 

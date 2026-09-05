@@ -8,6 +8,7 @@ import {
   getPageReactorBackground,
 } from "./page-dom.js";
 import { mountReactorGridLayoutBinding } from "../grid/ui-grid.js";
+import { ensureUpgradeSelectionRefresh } from "../upgrades/ui-upgrade-hub.js";
 import { bindLitRenderMulti } from "../../dom/lit-reactive.js";
 import { classMap } from "../../dom/lit.js";
 import { pwaState } from "../../store.js";
@@ -364,7 +365,7 @@ export function initializePage(ui, pageId) {
         ui._unmounts.push(ui.mountSectionCountsReactive("upgrades_content_wrapper"));
         ui._sectionCountsMountedUpgrades = true;
       }
-      ui.ensureUpgradeDetailPanelMounted("upgrades_detail_panel");
+      ensureUpgradeSelectionRefresh(ui);
       if (game?.upgradeset) ui.updateSectionCountsState(game);
       autoExpandAffordableHubSections(ui, "upgrades_content_wrapper");
       requestAnimationFrame(() => {
@@ -386,7 +387,7 @@ export function initializePage(ui, pageId) {
         ui._unmounts.push(ui.mountSectionCountsReactive("experimental_upgrades_content_wrapper"));
         ui._sectionCountsMountedResearch = true;
       }
-      ui.ensureUpgradeDetailPanelMounted("research_detail_panel");
+      ensureUpgradeSelectionRefresh(ui);
       if (game?.upgradeset) ui.updateSectionCountsState(game);
       autoExpandAffordableHubSections(ui, "experimental_upgrades_content_wrapper");
       if (

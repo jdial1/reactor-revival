@@ -6,7 +6,6 @@ import { formatUpgradeDisplayCost } from "./upgrade-display.js";
 import {
   upgradeCardTemplate,
   partButtonTemplate,
-  partDetailsBlockTemplate,
   partStatIconTemplate,
   partStatTemplate,
 } from "../../templates/buttonFactoryTemplates.js";
@@ -161,24 +160,6 @@ function buildPartStats(part) {
   if (part.reactor_power > 0) stats.push(partStatTemplate({ className: "stat-rpower", content: html`${powerIcon}${fmt(part.reactor_power)} cap` }));
   if (part.power_increase > 0) stats.push(partStatTemplate({ className: "stat-boost", content: html`+${fmt(part.power_increase)}%${powerIcon}` }));
   return stats;
-}
-
-export function partsModuleInfoCardTemplate(part, game = null) {
-  const iconPath = partIconPath(part);
-  if (!iconPath) return html``;
-  const stats = buildPartStats(part);
-  const bonusLines = getUpgradeBonusLines(part, { tile: null, game });
-  return html`
-    <div class="parts-module-info-inner">
-      <div class="image" style=${styleMap({ backgroundImage: `url('${iconPath}')` })}></div>
-      ${partDetailsBlockTemplate({
-        partTitle: part.title || "",
-        stats,
-        description: resolvePartDescription(part, null, game),
-        bonusLines,
-      })}
-    </div>
-  `;
 }
 
 export const PartButton = (part, onClick, opts = {}) => {

@@ -170,7 +170,6 @@ function upgradesSectionTemplate() {
       </div>
     </article>
   </div>
-  <div id="upgrades_detail_panel" class="upgrade-hub-detail-panel" aria-live="polite"></div>
 </section>
   `;
 }
@@ -229,7 +228,6 @@ function researchSectionTemplate() {
       </div>
     </article>
   </div>
-  <div id="research_detail_panel" class="upgrade-hub-detail-panel" aria-live="polite"></div>
 </section>
   `;
 }

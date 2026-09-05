@@ -65,7 +65,7 @@ export function upgradeCardTemplate({
   `;
 }
 
-export function partDetailsBlockTemplate({
+function partDetailsBlockTemplate({
   partTitle,
   stats,
   description,
@@ -126,14 +126,4 @@ export function partStatTemplate({
   content,
 }) {
   return html`<span class=${className}>${content}</span>`;
-}
-
-export function closeButtonTemplate({
-  onClick,
-}) {
-  return html`
-    <button class="modal-close-btn" @click=${onClick}>
-      ✖
-    </button>
-  `;
 }

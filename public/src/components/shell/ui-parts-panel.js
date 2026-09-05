@@ -6,18 +6,16 @@ import { logger } from "../../core/logger.js";
 import { numFormat as fmt } from "../../core/numbers.js";
 import { actions } from "../../store.js";
 import { bindLitRenderMulti } from "../../dom/lit-reactive.js";
-import { PartButton, partsModuleInfoCardTemplate } from "../upgrades/button-factory.js";
+import { PartButton } from "../upgrades/button-factory.js";
 import {
   partsPanelLayoutTemplate,
   partsPanelEmptyTabContentTemplate,
   partsPanelTabContentTemplate,
   quickSelectSlotTemplate,
-  upgradeHubDetailEmptyTemplate,
-  upgradeHubDetailPanelTemplate,
 } from "../../templates/uiComponentsTemplates.js";
 import { getUiElement } from "./page-dom.js";
 import { classMap, styleMap, repeat } from "../../dom/lit.js";
-import { partIconPath, resolvePartDescription } from "../tooltip-stats.js";
+import { partIconPath } from "../tooltip-stats.js";
 import { refreshPartsFromSession } from "../../domain/part.js";
 
 function getPartsSectionElement(ui) {
@@ -118,50 +116,6 @@ function buildPartsTabContent(ui, partset, unlockManager, activeTab, powerActive
   return partsPanelTabContentTemplate({ powerActive, heatActive, grid });
 }
 
-function buildPartDetailPanelData(part, ui) {
-  const iconPath = partIconPath(part);
-  if (!iconPath) return null;
-  const unlockManager = ui.game?.unlockManager;
-  const locked = unlockManager && !unlockManager.isPartUnlocked(part);
-  const doctrineLocked = ui.game?.partset?.isPartDoctrineLocked?.(part) ?? false;
-  const rawDesc = resolvePartDescription(part, null, ui.game);
-  const descHtml = ui.stateManager?.addPartIconsToTitle?.(rawDesc) ?? rawDesc;
-  const costDisplay = part.erequires ? `${fmt(part.cost)} EP` : `$${fmt(part.cost)}`;
-  const statParts = [];
-  if (part.power > 0) statParts.push(`${fmt(part.power)} power`);
-  if (part.heat > 0) statParts.push(`${fmt(part.heat)} heat`);
-  const levelHeader = locked
-    ? `${Math.min(unlockManager?.getPreviousTierCount(part) ?? 0, 10)}/10`
-    : (statParts.join(" · ") || "Selected");
-  return {
-    iconPath,
-    title: part.title || "",
-    descHtml,
-    levelHeader,
-    costDisplay,
-    doctrineLocked: doctrineLocked || locked,
-    isMaxed: false,
-    unaffordable: !part.affordable && !locked && !doctrineLocked,
-    affordProgress: null,
-    ariaLabel: `${part.title || "Part"}, ${costDisplay}`,
-    onBuyClick: (e) => {
-      e.stopPropagation();
-      if (locked || doctrineLocked || !part.affordable) return;
-      ui.stateManager.setClickedPart(part);
-    },
-  };
-}
-
-// Only called with a selected part: the panel itself is gated on selection.
-function buildPartsModuleInfoContent(ui, selPart, uiState) {
-  const isMobile = uiState?.is_mobile_viewport ?? (typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT_PX);
-  if (isMobile) {
-    const data = buildPartDetailPanelData(selPart, ui);
-    return data ? upgradeHubDetailPanelTemplate(data) : upgradeHubDetailEmptyTemplate("— Select a module —");
-  }
-  return partsModuleInfoCardTemplate(selPart, ui.game);
-}
-
 function buildPartsPanelLayoutTemplate(ui, uiState) {
   const game = ui.game;
   const partset = game?.partset;
@@ -176,10 +130,6 @@ function buildPartsPanelLayoutTemplate(ui, uiState) {
   const heatActive = activeTab === "heat";
   const tabContent = buildPartsTabContent(ui, partset, unlockManager, activeTab, powerActive, heatActive);
 
-  const selectedPartId = uiState?.interaction?.selectedPartId ?? null;
-  const selPart = selectedPartId && partset ? partset.getPartById(selectedPartId) : null;
-  const isMobile = uiState?.is_mobile_viewport ?? (typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT_PX);
-  const moduleInfoContent = selPart ? buildPartsModuleInfoContent(ui, selPart, uiState) : null;
 
   return partsPanelLayoutTemplate({
     powerActive,
@@ -189,10 +139,6 @@ function buildPartsPanelLayoutTemplate(ui, uiState) {
     onSwitchHeat: () => switchTab("heat"),
     onHelpToggle,
     tabContent,
-    moduleInfoContent,
-    moduleInfoPanelClass: isMobile ? "upgrade-hub-detail-panel" : "parts-module-info-panel",
-    hasSelection: !!selPart,
-    onDeselect: () => ui.stateManager?.setClickedPart?.(null),
   });
 }
 

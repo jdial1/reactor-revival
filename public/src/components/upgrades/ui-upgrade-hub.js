@@ -10,14 +10,11 @@ import { isCellUpgradeVisible } from "../../domain/upgrade.js";
 import { calculateSectionCounts, findTopAffordableInSection } from "../../domain/upgrade-sections.js";
 import { UpgradeCard } from "./button-factory.js";
 import { purchaseUpgradeWithFeedback } from "./presentation.js";
-import { formatUpgradeDisplayCost } from "./upgrade-display.js";
 import { getUiElement } from "../shell/page-dom.js";
 import {
   debugVariablesSectionTemplate,
   debugVariablesTemplate,
   sectionHubMetaTemplate,
-  upgradeHubDetailEmptyTemplate,
-  upgradeHubDetailPanelTemplate,
 } from "../../templates/uiComponentsTemplates.js";
 const EXPAND_UPGRADE_IDS = ["expand_reactor_rows", "expand_reactor_cols"];
 
@@ -262,72 +259,7 @@ export function mountSectionCountsReactive(ui, wrapperId) {
   return () => teardownAll(unmounts);
 }
 
-function buildUpgradeDetailPanelData(upgrade, upgradeset) {
-  if (!upgrade || !upgradeset) return null;
-  const isMaxed = upgrade.level >= upgrade.max_level;
-  const available = upgradeset.isUpgradeAvailable(upgrade.id);
-  const doctrineLocked = !available;
-  const level = upgrade.level;
-  const levelHeader = isMaxed ? "MAX" : `Level ${level}/${upgrade.max_level}`;
-  const rawDesc = isMaxed ? "" : (upgrade.description || "");
-  const descHtml = upgrade.game?.ui?.stateManager
-    ? upgrade.game.ui.stateManager.addPartIconsToTitle(rawDesc)
-    : rawDesc;
-  const costDisplay = isMaxed ? "" : (formatUpgradeDisplayCost(upgrade) || upgrade.cost || "");
-  const iconPath = upgrade.upgrade?.icon ?? upgrade.icon ?? "img/ui/status/status_star.png";
-  return {
-    upgradeId: upgrade.id,
-    iconPath,
-    title: upgrade.title,
-    descHtml,
-    levelHeader,
-    costDisplay,
-    doctrineLocked,
-    isMaxed,
-    unaffordable: !upgrade.affordable && !isMaxed && !doctrineLocked,
-    affordProgress: upgrade.afford_progress ?? 0,
-    ariaLabel: isMaxed ? `${upgrade.title} is maxed out` : `Buy ${upgrade.title} for ${costDisplay}`,
-    onBuyClick: (e) => {
-      e.stopPropagation();
-      purchaseUpgradeWithFeedback(upgradeset, upgrade.id);
-    },
-  };
-}
-
-function mountUpgradeDetailPanel(ui, panelId) {
-  const panel = getUiElement(ui, panelId);
-  if (!panel?.isConnected || !ui?.uiState) return null;
-  const isResearchPanel = panelId === "research_detail_panel";
-  const subscriptions = [
-    { state: ui.uiState.interaction, keys: ["selectedUpgradeId"] },
-    { state: ui.uiState, keys: ["active_page", "snapshot_rev"] },
-  ].filter((s) => s.state != null);
-  const renderFn = () => {
-    const activePage = ui.uiState.active_page;
-    if (isResearchPanel && activePage !== "experimental_upgrades_section") {
-      return upgradeHubDetailEmptyTemplate();
-    }
-    if (!isResearchPanel && activePage !== "upgrades_section") {
-      return upgradeHubDetailEmptyTemplate();
-    }
-    const selectedId = ui.uiState.interaction.selectedUpgradeId;
-    const upgradeset = ui.game?.upgradeset;
-    const upgrade = selectedId && upgradeset ? upgradeset.getUpgrade(selectedId) : null;
-    if (!upgrade || !isCellUpgradeVisible(upgrade, ui.game)) {
-      return upgradeHubDetailEmptyTemplate();
-    }
-    const isResearchUpgrade = Boolean(upgrade.base_ecost?.gt?.(0));
-    if (isResearchPanel !== isResearchUpgrade) {
-      return upgradeHubDetailEmptyTemplate();
-    }
-    const data = buildUpgradeDetailPanelData(upgrade, upgradeset);
-    if (!data) return upgradeHubDetailEmptyTemplate();
-    return upgradeHubDetailPanelTemplate(data);
-  };
-  return bindLitRenderMulti(subscriptions, renderFn, panel);
-}
-
-function ensureUpgradeDetailSelectionRefresh(ui) {
+export function ensureUpgradeSelectionRefresh(ui) {
   if (!ui || ui._upgradeDetailSelectionRefreshMounted) return;
   if (!ui.uiState?.interaction || !ui.game?.upgradeset) return;
   ui._upgradeDetailSelectionRefreshMounted = true;
@@ -339,30 +271,6 @@ function ensureUpgradeDetailSelectionRefresh(ui) {
   ui._unmounts.push(() => {
     teardownAll(unsubs);
   });
-}
-
-export function ensureUpgradeDetailPanelMounted(ui, panelId) {
-  if (!ui) return;
-  if (!ui._upgradeDetailPanelUnmounts) ui._upgradeDetailPanelUnmounts = {};
-  if (ui._upgradeDetailPanelUnmounts[panelId]) return;
-  const unmount = mountUpgradeDetailPanel(ui, panelId);
-  if (typeof unmount !== "function") return;
-  ui._upgradeDetailPanelUnmounts[panelId] = unmount;
-  ui._unmounts.push(unmount);
-  ensureUpgradeDetailSelectionRefresh(ui);
-}
-
-export function mountUpgradeDetailPanels(ui) {
-  ensureUpgradeDetailPanelMounted(ui, "upgrades_detail_panel");
-  ensureUpgradeDetailPanelMounted(ui, "research_detail_panel");
-  return () => {
-    const unmounts = ui?._upgradeDetailPanelUnmounts;
-    if (!unmounts) return;
-    Object.values(unmounts).forEach((fn) => {
-      safeCall(fn);
-    });
-    ui._upgradeDetailPanelUnmounts = {};
-  };
 }
 
 export function getUpgradeSectionContainer(ui, locationKey) {

@@ -239,37 +239,7 @@ html[data-reduced-motion] #app_root { animation: none !important;
 }
 /* The module panel only renders while a part is selected; this corner control
    clears the selection and collapses the panel again, reclaiming its height. */
-.parts-module-info-panel,
-#parts_module_info.upgrade-hub-detail-panel { position: relative; }
-
-.parts-module-info-close {
- position: absolute;
- z-index: 3;
- top: 2px;
- right: 2px;
- display: flex;
- width: 30px;
- height: 30px;
- align-items: center;
- justify-content: center;
- padding: 0;
- border: 2px solid;
- border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
- background: var(--panel-bg);
- color: var(--sovietwave-paper);
- cursor: pointer;
- font-family: var(--ui-terminal-font);
- font-size: 0.8rem;
- line-height: 1;
-}
-
-.parts-module-info-close:active { border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark); }
 /* Keep the readout clear of the button. */
-#parts_module_info > :not(.parts-module-info-close) { padding-right: 34px; }
-
-.parts-module-info-empty,
-.parts-module-info-panel { font-family: var(--ui-terminal-font);
-}
 
 .leaderboard-loading-cell,
 .leaderboard-status-cell { padding: 1.25rem !important; text-align: center !important; font-family: var(--ui-terminal-font); color: var(--game-success-color); text-shadow: 0 0 6px rgb(110 139 61 / 45%);
@@ -678,10 +648,6 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
  #wrapper.page-reactor:not(.parts-panel-open) #parts_section #controls_nav { display: none !important;
  }
 
- #wrapper.page-reactor:not(.parts-panel-open) #parts_section #parts_module_info { display: block !important; overflow: visible !important; height: auto !important; max-height: none !important; padding: 0 !important; margin: 0 !important; opacity: 1 !important; pointer-events: auto !important; visibility: visible !important; margin-top: 0; order: 1;
- }
-
-
  #parts_section:not(.collapsed), #wrapper.parts-panel-open #parts_section { display: flex !important; opacity: 1 !important; pointer-events: auto; transform: translateY(0) !important; visibility: visible !important; animation: panel-jolt 0.15s steps(2) 2, panel-glow-pulse-mobile 5s infinite linear;
  }
 
@@ -694,16 +660,10 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
  #parts_section #parts_close_btn { order: 2; flex: 0 0 auto;
  }
 
- #parts_section #parts_module_info { order: 3; flex: 0 0 auto; margin-top: auto;
- }
-
  #parts_section #controls_nav { order: 4; flex: 0 0 auto;
  }
 
  #parts_section #parts_tab_contents { order: 5; flex: 0 0 auto;
- }
-
- #wrapper.parts-panel-open #parts_section #parts_module_info { margin-top: 0;
  }
 
  #wrapper.parts-panel-open #parts_section #parts_tab_contents { order: 2; flex: 1 1 auto; min-height: 0; max-height: none; overflow: hidden auto;
@@ -795,72 +755,6 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
   height: auto;
   min-height: 48px;
   flex: 0 0 auto;
- }
-
- .parts-module-info-panel { flex: 0 0 auto; padding: 4px 6px; border-top: 2px solid var(--bevel-dark); background: rgb(18 22 20); box-shadow: var(--well-depth); font-size: 0.5rem; line-height: 1.35;
- }
-
- .parts-module-info-inner { display: flex; align-items: center; gap: 6px; min-height: auto; flex-direction: row; text-align: left;
- }
-
- .parts-module-info-inner .image { width: 28px; height: 28px; flex-shrink: 0; background-position: center; background-repeat: no-repeat; background-size: contain;
- }
-
- .parts-module-info-inner .part-details { display: flex; overflow: hidden; min-width: 0; flex: 1; flex-direction: column; gap: 2px; text-align: left;
- }
-
- .parts-module-info-inner .part-details-title { overflow: hidden; color: rgb(255 255 255); font-size: 0.95em; font-weight: bold; text-overflow: ellipsis; white-space: nowrap;
- }
-
- .parts-module-info-inner .part-details-stats { display: flex; flex-wrap: wrap; color: rgb(204 204 204); font-size: 0.8em; gap: 4px 8px;
- }
-
- .parts-module-info-inner .part-details-stats .stat-cost { color: rgb(153 255 153);
- }
-
- .parts-module-info-inner .part-details-stats .stat-power { color: rgb(255 255 0);
- }
-
- .parts-module-info-inner .part-details-stats .stat-heat { color: rgb(255 136 0);
- }
-
- .parts-module-info-inner .part-details-stats .stat-vent { color: rgb(136 204 255);
- }
-
- .parts-module-info-inner .part-details-stats .stat-cont { color: rgb(255 170 0);
- }
-
- .parts-module-info-inner .part-details-stats .stat-xfer { color: rgb(136 170 255);
- }
-
- .parts-module-info-inner .part-details-stats .stat-tick { color: rgb(170 170 170);
- }
-
- .parts-module-info-inner .part-details-stats .stat-rpower { color: rgb(255 255 0);
- }
-
- .parts-module-info-inner .part-details-stats .stat-boost { color: rgb(0 255 0);
- }
-
- .parts-module-info-inner .part-details-desc { display: none;
- }
-
- .parts-module-info-inner .part-details-bonuses { display: none;
- }
-
- .parts-module-info-inner .part-details-bonuses:empty { display: none;
- }
-
- .parts-module-info-inner .part-details-bonuses .bonus-line { color: rgb(204 255 204); white-space: nowrap;
- }
-
- .parts-module-info-inner .part-details-bonuses .pos { color: rgb(0 255 0);
- }
-
- .parts-module-info-inner .part-details-bonuses .neg { color: rgb(255 68 68);
- }
-
- .parts-module-info-empty { display: block; color: rgb(100 110 105); font-size: 0.5rem; text-align: center;
  }
 
  #bottom_nav { position: fixed; z-index: 10; right: 0; bottom: 0; left: 0; display: grid; height: 44px; padding: 0; gap: 0; grid-template-columns: 1fr 1fr 1fr;
@@ -1520,42 +1414,6 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
 .upgrade-card.unaffordable .upgrade-level-info { color: inherit; opacity: 1;
 }
 
-.upgrade-hub-detail-panel { display: none;
-}
-
-.upgrade-hub-detail-empty { display: block; color: rgb(100 110 105); font-family: var(--ui-terminal-font); font-size: 0.8rem; line-height: 1.55; text-align: center;
-}
-
-.upgrade-hub-detail-inner { display: flex; min-height: 86px; flex-direction: column; gap: 10px;
-}
-
-.upgrade-hub-detail-copy { display: flex; width: 100%; min-width: 0; flex-direction: column; gap: 7px;
-}
-
-.upgrade-hub-detail-footer { display: flex; align-items: center; margin-top: auto; gap: 10px;
-}
-
-.upgrade-hub-detail-icon { display: flex; width: 58px; height: 58px; flex-shrink: 0; align-items: center; justify-content: center; border: 1px solid rgb(55 58 55); background-color: rgb(30 30 30); box-shadow: none;
-}
-
-.upgrade-hub-detail-icon .image { width: 41px; height: 41px; background-position: center; background-repeat: no-repeat; background-size: contain; image-rendering: pixelated;
-}
-
-.upgrade-hub-detail-title { color: rgb(255 224 130); font-family: var(--ui-terminal-font); font-size: 0.9rem; font-weight: bold; line-height: 1.4;
-}
-
-.upgrade-hub-detail-desc { color: rgb(200 200 200); font-family: var(--ui-terminal-font); font-size: 0.8rem; line-height: 1.55;
-}
-
-.upgrade-hub-detail-level { color: rgb(143 214 148); font-family: var(--ui-terminal-font); font-size: 0.8rem; font-weight: bold; white-space: nowrap;
-}
-
-.upgrade-hub-detail-buy { min-width: 115px; min-height: 48px; padding: 10px 14px; border: 1px solid rgb(70 72 70); margin: 0 0 0 auto; background: rgb(45 47 45); box-shadow: none; font-size: 0.84rem;
-}
-
-.upgrade-hub-detail-maxed { margin-left: auto; color: var(--game-success-color); font-family: var(--ui-terminal-font); font-size: 0.84rem; font-weight: bold;
-}
-
 #exotic_particles_display { position: relative; z-index: 0; box-sizing: border-box; padding: calc(8px + 1rem) 1rem 1rem; border: 4px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); margin-bottom: 2rem; background-color: rgb(0 0 0 / 60%); text-align: center; clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 0 calc(100% - 12px), 0 12px); overflow: hidden;
 }
 
@@ -1678,11 +1536,6 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
 
  #upgrades_content_wrapper,
  #experimental_upgrades_content_wrapper { min-height: 0; flex: 1 1 auto; padding-bottom: 0.5rem; -webkit-overflow-scrolling: touch; overflow-y: auto;
- }
-
- #upgrades_section .upgrade-hub-detail-panel,
- #experimental_upgrades_section .upgrade-hub-detail-panel,
- #parts_section .upgrade-hub-detail-panel { display: block; flex: 0 0 auto; min-height: 115px; padding: 14px 17px; border-top: 1px solid rgb(55 58 55); background: rgb(18 22 20); box-shadow: none; font-family: var(--ui-terminal-font);
  }
 
  #leaderboard_section,
@@ -2975,5 +2828,4 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
  .update-toast { bottom: 10px; left: 10px; right: 10px; transform: none; max-width: none; width: auto; }
  .version-check-toast { bottom: 10px; left: 10px; right: 10px; transform: none; max-width: none; width: auto; }
 }
-
 

@@ -15,8 +15,6 @@ import {
   ComponentRenderingUI,
   runPopulateUpgradeSection,
   mountSectionCountsReactive as mountHubSectionCounts,
-  mountUpgradeDetailPanels as mountHubUpgradeDetailPanels,
-  ensureUpgradeDetailPanelMounted as ensureHubUpgradeDetailPanelMounted,
   updateSectionCountsState as syncSectionCountsState,
   mountExoticParticlesDisplayIfNeeded as mountControlDeckEpDisplay,
   CopyPasteUI,
@@ -284,14 +282,6 @@ export class UI {
 
   mountSectionCountsReactive(wrapperId) {
     return mountHubSectionCounts(this, wrapperId);
-  }
-
-  mountUpgradeDetailPanels() {
-    return mountHubUpgradeDetailPanels(this);
-  }
-
-  ensureUpgradeDetailPanelMounted(panelId) {
-    ensureHubUpgradeDetailPanelMounted(this, panelId);
   }
 
   mountExoticParticlesDisplayIfNeeded() {

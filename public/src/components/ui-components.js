@@ -275,8 +275,7 @@ export {
   runPopulateUpgradeSection,
   updateSectionCountsState,
   mountSectionCountsReactive,
-  mountUpgradeDetailPanels,
-  ensureUpgradeDetailPanelMounted,
+  ensureUpgradeSelectionRefresh,
   getUpgradeSectionContainer,
   appendUpgradeToSection,
 } from "./upgrades/ui-upgrade-hub.js";
