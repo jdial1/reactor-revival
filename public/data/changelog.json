@@ -9,6 +9,13 @@
         ]
     },
     {
+        "version": "26_09_05-1708",
+        "date": "2026-09-05",
+        "bullets": [
+            "Rebuild every sound effect from a generator and kill the squeal"
+        ]
+    },
+    {
         "version": "26_09_05-1651",
         "date": "2026-09-05",
         "bullets": [
@@ -27,13 +34,6 @@
         "date": "2026-09-05",
         "bullets": [
             "Fix mobile parts panel collapsing to a 52px strip, plus illegible settings text"
-        ]
-    },
-    {
-        "version": "26_09_05-1455",
-        "date": "2026-09-05",
-        "bullets": [
-            "Fix game failing to start on GitHub Pages (manifest 404)"
         ]
     }
 ]
