@@ -757,8 +757,29 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
   overflow: visible;
   scroll-snap-type: none;
  }
+ /* Default h4/h6 margins gave each category heading a 102px block for 27px of
+    text -- roughly three quarters whitespace, repeated for every category. Collapse
+    the margins and tighten the type so the list itself gets the room. */
+ #wrapper.parts-panel-open #parts_tab_contents hgroup {
+  display: block;
+  padding: 0;
+  margin: 0 0 4px;
+ }
 
- #wrapper.parts-panel-open #parts_tab_contents hgroup { display: block; padding: 2px 0; }
+ #wrapper.parts-panel-open #parts_tab_contents hgroup h4 {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.15;
+ }
+
+ #wrapper.parts-panel-open #parts_tab_contents hgroup h6 {
+  margin: 2px 0 0;
+  font-size: 0.58rem;
+  line-height: 1.3;
+  opacity: 0.75;
+ }
+
+ #wrapper.parts-panel-open #parts_tab_contents .parts_tab_content.active { gap: 8px; }
 
  #wrapper.parts-panel-open #parts_tab_contents { padding: 4px 6px 8px; }
  /* A new game turns help mode on (boot-session startNewGameFlow), which lays parts
