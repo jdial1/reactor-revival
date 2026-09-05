@@ -9,6 +9,13 @@
         ]
     },
     {
+        "version": "26_09_05-1805",
+        "date": "2026-09-05",
+        "bullets": [
+            "Close the dead band under the reactor and cut number-format overhead"
+        ]
+    },
+    {
         "version": "26_09_05-1708",
         "date": "2026-09-05",
         "bullets": [
@@ -27,13 +34,6 @@
         "date": "2026-09-05",
         "bullets": [
             "Condense parts store category headings"
-        ]
-    },
-    {
-        "version": "26_09_05-1555",
-        "date": "2026-09-05",
-        "bullets": [
-            "Fix mobile parts panel collapsing to a 52px strip, plus illegible settings text"
         ]
     }
 ]
