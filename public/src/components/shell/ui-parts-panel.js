@@ -342,7 +342,7 @@ export function initializePartsPanel(ui) {
     }, { signal });
   }
 
-  ui.stateManager.updatePartsPanelToggleIcon(null);
+  ui.stateManager?.updatePartsPanelToggleIcon?.(null);
 }
 
 export function setupPartsPanel(ui) {

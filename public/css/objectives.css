@@ -1269,7 +1269,7 @@ body[data-tutorial-step="sell_power"] #parts_section { position: relative; z-ind
  }
 }
 
-@media (width > 900px) { #wrapper.page-reactor #reactor_section { padding-top: calc(70px + var(--main-top-nav-height, 60px)); padding-bottom: calc(var(--bottom-nav-height, 44px));
+@media (width > 900px) { #wrapper.page-reactor #reactor_section { padding-top: calc(70px + var(--main-top-nav-height, 60px)); padding-bottom: var(--desktop-info-bar-height, 73px);
  }
 }
 

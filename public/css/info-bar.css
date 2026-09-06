@@ -1,4 +1,4 @@
-﻿/* Legacy Info Bar (Desktop) */
+/* Legacy Info Bar (Desktop) */
 .info-bar-legacy { position: fixed; z-index: 26; right: 0 !important; bottom: var(--bottom-nav-height); left: 0 !important; display: flex; overflow: hidden; width: 100vw !important; min-width: 0; height: calc(44px + env(safe-area-inset-bottom)) !important; box-sizing: border-box; flex-direction: row; align-items: center; justify-content: center; padding: 0 !important; padding-bottom: env(safe-area-inset-bottom) !important; border-radius: 0; border-top: 3px solid var(--bevel-light) !important; margin: 0 !important; background: rgb(45 45 45) !important; box-shadow:
   inset 0 2px 4px rgb(0 0 0 / 30%),
   0 2px 8px rgb(0 0 0 / 50%);
@@ -192,12 +192,16 @@ footer#bottom_nav button { display: flex; width: 100%; height: 100%; min-height:
 #bottom_nav .secondary { display: flex; /* ensure horizontal + vertical centering */
  width: 100%; height: 100%; align-items: center; justify-content: center; padding: 1em 0; border: none; border-radius: 0; margin: 0; background: none; color: rgb(255 255 255); font-size: 1em; line-height: 1; transition: background 0.2s;
 }
+/* The desktop bar's height, published so #reactor_section can reserve exactly
+   this much instead of guessing with --bottom-nav-height (a mobile value). */
+:root { --desktop-info-bar-height: 73px;
+}
 
 @media (width >= 901px) { #bottom_nav,
  footer#bottom_nav { display: none !important; overflow: hidden; width: 0 !important; height: 0 !important; padding: 0 !important; border: none !important; margin: 0 !important;
  }
 
- #info_bar { position: fixed !important; z-index: 26 !important; right: 0 !important; bottom: 0 !important; left: 0 !important; display: flex !important; overflow: hidden !important; width: 100vw !important; height: 73px !important; flex-direction: row !important; align-items: center !important; justify-content: center !important; padding: 0 !important; border-radius: 0 !important; background: rgb(45 45 45) !important; box-sizing: border-box !important; box-shadow:
+ #info_bar { position: fixed !important; z-index: 26 !important; right: 0 !important; bottom: 0 !important; left: 0 !important; display: flex !important; overflow: hidden !important; width: 100vw !important; height: var(--desktop-info-bar-height, 73px) !important; flex-direction: row !important; align-items: center !important; justify-content: center !important; padding: 0 !important; border-radius: 0 !important; background: rgb(45 45 45) !important; box-sizing: border-box !important; box-shadow:
    inset 0 2px 4px rgb(0 0 0 / 30%),
    0 2px 8px rgb(0 0 0 / 50%),
    0 0 20px rgb(0 0 0 / 20%) !important;

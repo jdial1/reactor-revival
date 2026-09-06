@@ -189,6 +189,10 @@ function teardownGameServices(ui, _game) {
     ui._gameServiceUnsubs = [];
   }
   ui.meltdownUI?.cleanup?.();
+  // Drop the DOM listeners before the services they read from. Without this
+  // the reactor's pointermove handler stayed attached to a live element and
+  // threw on every mouse move once stateManager was null.
+  ui.inputHandler?.teardownAllListeners?.();
   ui.stateManager?.teardown?.();
   ui.stateManager = null;
   ui.inputHandler = null;

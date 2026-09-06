@@ -230,7 +230,7 @@ export class InputHandler {
     const ac = new AbortController();
     const { signal } = ac;
     reactorElement.addEventListener("pointermove", (e) => {
-      const clickedPart = this.ui.stateManager.getClickedPart();
+      const clickedPart = this.ui.stateManager?.getClickedPart();
       if (
         !clickedPart ||
         !heatComponentCategories.includes(clickedPart.category)
