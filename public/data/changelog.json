@@ -9,6 +9,13 @@
         ]
     },
     {
+        "version": "26_09_05-2054",
+        "date": "2026-09-05",
+        "bullets": [
+            "Stop the reactor's input listeners outliving their services"
+        ]
+    },
+    {
         "version": "26_09_05-2001",
         "date": "2026-09-05",
         "bullets": [
@@ -27,13 +34,6 @@
         "date": "2026-09-05",
         "bullets": [
             "Close the dead band under the reactor and cut number-format overhead"
-        ]
-    },
-    {
-        "version": "26_09_05-1708",
-        "date": "2026-09-05",
-        "bullets": [
-            "Rebuild every sound effect from a generator and kill the squeal"
         ]
     }
 ]
