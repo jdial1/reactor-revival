@@ -1,4 +1,4 @@
-﻿.info-bar-desktop .info-item.hull.hull-empty-state { color: rgb(244 67 54); border-color: rgb(100 35 30) rgb(60 20 18) rgb(60 20 18) rgb(100 35 30); background: rgb(35 18 16);
+.info-bar-desktop .info-item.hull.hull-empty-state { color: rgb(244 67 54); border-color: rgb(100 35 30) rgb(60 20 18) rgb(60 20 18) rgb(100 35 30); background: rgb(35 18 16);
 }
 
 .info-bar-desktop .info-item.hull.hull-empty-state .stats-inline-label,
@@ -139,4 +139,52 @@
  html[data-ui-idle] .about-scroll-hint { animation: none;
  }
 }
+/* The changelog modal shipped with no CSS whatsoever: the overlay was not
+   positioned and the body inherited near-black text on the near-black panel,
+   so "Recent Changes" was unreadable and spilled the full width of the page. */
+.changelog-modal-overlay { position: fixed; z-index: 2000; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgb(0 0 0 / 78%);
+}
 
+.changelog-modal { display: flex; width: min(680px, 92vw); max-height: min(78vh, 720px); box-sizing: border-box; flex-direction: column; padding: 20px 22px; border: 4px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); background: var(--panel-bg); box-shadow: 0 18px 48px rgb(0 0 0 / 70%); gap: 14px;
+}
+
+.changelog-modal h2 { margin: 0; color: var(--game-warning-color, rgb(255 176 0)); font-family: var(--ui-pixel-font); font-size: 0.95rem; letter-spacing: 0.04em; line-height: 1.4; text-shadow: 2px 2px 0 rgb(0 0 0 / 80%);
+}
+
+.changelog-modal-body { min-height: 0; flex: 1 1 auto; overflow-y: auto; padding-right: 6px; -webkit-overflow-scrolling: touch;
+}
+
+.changelog-entry { padding-bottom: 12px; border-bottom: 2px solid var(--bevel-dark); margin-bottom: 14px;
+}
+
+.changelog-entry:last-child { padding-bottom: 0; border-bottom: none; margin-bottom: 0;
+}
+
+.changelog-entry-version { display: flex; align-items: baseline; margin: 0 0 8px; color: var(--game-success-color, rgb(93 156 81)); font-family: var(--ui-pixel-font); font-size: 0.62rem; letter-spacing: 0.03em; gap: 10px;
+}
+
+.changelog-entry-date { color: rgb(150 158 166); font-family: var(--ui-pixel-font); font-size: 0.5rem; letter-spacing: 0.02em;
+}
+
+.changelog-entry-bullets { padding-left: 20px; margin: 0; color: rgb(226 232 238); font-size: 0.85rem; line-height: 1.65;
+}
+
+.changelog-entry-bullets li { margin-bottom: 6px;
+}
+
+.changelog-empty { margin: 0; color: rgb(180 188 196); font-size: 0.85rem;
+}
+
+.changelog-modal-actions { display: flex; flex: none; justify-content: flex-end; padding-top: 4px; border-top: 2px solid var(--bevel-dark); gap: 10px;
+}
+/* Credits and policy links were rendering in the browser default blue
+   (rgb(0 0 238)) on a dark panel - a 1.85:1 contrast ratio. */
+#about_section a,
+#privacy_policy_section a,
+#terms_of_service_section a { color: rgb(120 196 255); text-decoration: underline; text-underline-offset: 2px;
+}
+
+#about_section a:hover,
+#privacy_policy_section a:hover,
+#terms_of_service_section a:hover { color: rgb(170 220 255);
+}

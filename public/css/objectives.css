@@ -684,11 +684,13 @@
 
 .refund-safety-cover-wrap.cover-open .refund-danger-btn { pointer-events: auto;
 }
-
-body:not(.page-reactor) #parts_section { display: none;
+/* page-reactor is applied to #wrapper by the shell class map, never to body,
+   so body:not(.page-reactor) matched on every page and hid the parts panel
+   outright. Desktop had no !important rule to climb back over it. */
+#wrapper:not(.page-reactor) #parts_section { display: none;
 }
 
-body:not(.page-reactor) #objectives_toast_btn { display: none;
+#wrapper:not(.page-reactor) #objectives_toast_btn { display: none;
 }
 
 #tooltip { position: fixed; z-index: 1101; width: auto; min-width: 300px; max-width: 400px; padding: 1rem; border: 8px solid var(--bevel-dark) !important; border-radius: 0; background: #050805 !important; box-shadow: 10px 10px 0 rgb(0 0 0 / 50%), inset 0 0 40px rgb(0 0 0 / 90%) !important; font-size: 0.85em; line-height: 1.3; opacity: 1; transition: opacity 0.2s ease; box-sizing: border-box; overflow: hidden auto; overflow-wrap: break-word; word-wrap: break-word;
@@ -1456,17 +1458,46 @@ body:has(> .page-container) { height: auto !important; min-height: 100% !importa
 #reactor_copy_paste_toggle .expand-icon,
 #reactor_copy_paste_toggle .collapse-icon { display: inline-block; color: rgb(255 255 255); font-size: 16px; line-height: 1;
 }
-
-#reactor_copy_paste_btns.collapsed, #wrapper.copy-paste-collapsed #reactor_copy_paste_btns #reactor_copy_paste_toggle .expand-icon { display: inline-block !important;
+/* Each of these was written as a selector LIST whose first member was the
+   container rather than the icon inside it, so #reactor_copy_paste_btns
+   itself picked up display:none/inline-block and lost its flex column
+   layout - the toolbar sprayed across the right edge of the reactor.
+   Both members now address the icon. */
+#reactor_copy_paste_btns.collapsed #reactor_copy_paste_toggle .expand-icon,
+#wrapper.copy-paste-collapsed #reactor_copy_paste_btns #reactor_copy_paste_toggle .expand-icon { display: inline-block !important;
 }
 
-#reactor_copy_paste_btns.collapsed, #wrapper.copy-paste-collapsed #reactor_copy_paste_btns #reactor_copy_paste_toggle .collapse-icon { display: none !important;
+#reactor_copy_paste_btns.collapsed #reactor_copy_paste_toggle .collapse-icon,
+#wrapper.copy-paste-collapsed #reactor_copy_paste_btns #reactor_copy_paste_toggle .collapse-icon { display: none !important;
 }
 
-#reactor_copy_paste_btns:not(.collapsed), #wrapper:not(.copy-paste-collapsed) #reactor_copy_paste_btns #reactor_copy_paste_toggle .expand-icon { display: none !important;
+#reactor_copy_paste_btns:not(.collapsed) #reactor_copy_paste_toggle .expand-icon,
+#wrapper:not(.copy-paste-collapsed) #reactor_copy_paste_btns #reactor_copy_paste_toggle .expand-icon { display: none !important;
 }
 
-#reactor_copy_paste_btns:not(.collapsed), #wrapper:not(.copy-paste-collapsed) #reactor_copy_paste_btns #reactor_copy_paste_toggle .collapse-icon { display: inline-block !important;
+#reactor_copy_paste_btns:not(.collapsed) #reactor_copy_paste_toggle .collapse-icon,
+#wrapper:not(.copy-paste-collapsed) #reactor_copy_paste_btns #reactor_copy_paste_toggle .collapse-icon { display: inline-block !important;
+}
+/* The OPEN/HIDE labels never had any rules at all: both rendered at once, in
+   the browser default black, off the right edge of the screen. */
+.reactor-toolbar-labeled-btn { display: flex; min-width: 36px; height: 36px; box-sizing: border-box; align-items: center; justify-content: center; padding: 0 8px; border: 3px solid; border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light); background: rgb(42 45 48); gap: 6px;
+}
+
+.reactor-toolbar-labeled-btn .reactor-toolbar-btn-icon { display: inline-flex; width: 16px; height: 16px; align-items: center; justify-content: center; flex: none;
+}
+
+.reactor-toolbar-labeled-btn .reactor-toolbar-btn-icon img { width: 16px; height: 16px;
+}
+
+.reactor-toolbar-btn-label { color: rgb(235 238 242); font-family: var(--ui-pixel-font); font-size: 0.5rem; letter-spacing: 0.04em; line-height: 1; text-shadow: 1px 1px 0 rgb(0 0 0 / 80%); white-space: nowrap;
+}
+
+#reactor_copy_paste_btns.collapsed #reactor_copy_paste_toggle .toolbar-label-collapse,
+#wrapper.copy-paste-collapsed #reactor_copy_paste_btns #reactor_copy_paste_toggle .toolbar-label-collapse { display: none;
+}
+
+#reactor_copy_paste_btns:not(.collapsed) #reactor_copy_paste_toggle .toolbar-label-expand,
+#wrapper:not(.copy-paste-collapsed) #reactor_copy_paste_btns #reactor_copy_paste_toggle .toolbar-label-expand { display: none;
 }
 
 .reactor_copy_paste_buttons { display: flex; flex-direction: column; align-items: center; gap: 8px;

@@ -452,7 +452,7 @@ html[data-reduced-motion] #app_root { animation: none !important;
  }
 }
 
-#reactor_wrapper { position: relative; display: flex; overflow: hidden; width: 100%; min-height: 0; flex: 1; align-items: center; justify-content: center; -ms-overflow-style: none; scrollbar-width: none; padding: 15px !important; border: 12px solid #1a1a1a !important; background-color: #0a0a0a !important; box-shadow: inset 0 0 60px 20px rgb(0 0 0 / 90%), 5px 5px 0 #333;
+#reactor_wrapper { position: relative; box-sizing: border-box; display: flex; overflow: hidden; width: 100%; min-height: 0; flex: 1; align-items: center; justify-content: center; -ms-overflow-style: none; scrollbar-width: none; padding: 15px !important; border: 12px solid #1a1a1a !important; background-color: #0a0a0a !important; box-shadow: inset 0 0 60px 20px rgb(0 0 0 / 90%), 5px 5px 0 #333;
  animation: core-rumble 8s ease-in-out infinite;
 }
 
@@ -1086,7 +1086,7 @@ footer#bottom_nav button.active { border-color: var(--bevel-dark) var(--bevel-li
 #controls_nav img.control-icon { filter: sepia(1) saturate(5) hue-rotate(5deg);
 }
 
-@media (width >= 901px) { #parts_section { top: calc(var(--main-top-nav-height) + env(safe-area-inset-top, 0px)); width: 275px; min-width: 275px; max-width: 275px; height: calc(100vh - var(--main-top-nav-height) - env(safe-area-inset-top, 0px)); flex: 0 0 275px; overflow: hidden auto; padding-bottom: 10px; box-shadow: 8px 0 24px rgb(0 0 0 / 45%) !important; border-right: 4px solid var(--bevel-dark); transition: transform 0.25s steps(6, end), box-shadow 0.2s steps(4, end) !important; -webkit-overflow-scrolling: touch;
+@media (width >= 901px) { #parts_section { box-sizing: border-box; top: calc(var(--main-top-nav-height) + env(safe-area-inset-top, 0px)); width: 275px; min-width: 275px; max-width: 275px; height: calc(100vh - var(--main-top-nav-height) - env(safe-area-inset-top, 0px)); flex: 0 0 275px; overflow: hidden auto; padding-bottom: 10px; box-shadow: 8px 0 24px rgb(0 0 0 / 45%) !important; border-right: 4px solid var(--bevel-dark); transition: transform 0.25s steps(6, end), box-shadow 0.2s steps(4, end) !important; -webkit-overflow-scrolling: touch;
  }
 
  #parts_panel_reactive_root { display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column;
